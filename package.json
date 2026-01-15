@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "build": "tsdown",
     "prepare": "simple-git-hooks install",
     "example": "npx tsx examples/01-basic-example.ts",

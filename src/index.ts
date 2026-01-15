@@ -1,41 +1,47 @@
 import { promises as fs } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
-import type { Plugin } from 'vite'
+import type { FilterPattern, Plugin } from 'vite'
 import { createFilter } from 'vite'
 
 type Options = Partial<{
   storeDir: string
-  exclude: string | string[]
+  include: FilterPattern
+  exclude: FilterPattern
   output: string
-  watch?: boolean
+  watch: boolean
 }>
 
 const defaultOptions: Options = {
   storeDir: 'src/store',
-  exclude: '**/index.ts',
-  output: 'src/helper/use-store.ts',
+  include: '**/*.{ts,js}',
+  exclude: '**/index.{ts,js}',
+  output: 'src/helper/use-store.js',
 }
 
 export default function (options: Options = {}): Plugin {
   options = { ...defaultOptions, ...options, }
 
-  const { storeDir, exclude, output, } = options as Required<Options>
+  const { storeDir, include, exclude, output, } = options as Required<Options>
   let root = process.cwd()
 
   const resolvePath = (target: string) => (isAbsolute(target) ? target : resolve(root, target))
   const storePath = () => resolvePath(storeDir)
-  const outputPath = () => resolvePath(output)
+  const outputPath = () => {
+    const path = resolvePath(output)
+    // 确保输出 .js 文件
+    return path.endsWith('.js') ? path : path.replace(/\.ts$/, '.js')
+  }
+  const outputDtsPath = () => outputPath().replace(/\.js$/, '.d.ts')
   const outputDir = () => dirname(outputPath())
-  const filter = createFilter('**/*.ts', exclude)
+  const filter = createFilter(include, exclude)
 
   async function generateConfigFiles() {
     await fs.mkdir(outputDir(), { recursive: true })
     const storeRoot = storePath()
     const storesPath = await fs.readdir(storeRoot)
     const storeNames = storesPath
-      .filter(i => i.endsWith('.ts'))
       .filter(i => filter(resolve(storeRoot, i)))
-      .map(i => i.replace('.ts', ''))
+      .map(i => i.replace(/\.(ts|js)$/, ''))
 
     // 计算从 output 文件到 store 目录的相对路径
     let relativeStorePath = relative(outputDir(), storeRoot)
@@ -43,11 +49,9 @@ export default function (options: Options = {}): Plugin {
       relativeStorePath = `./${relativeStorePath}`
     }
 
-    const ctx = `
+    // 生成 JS 文件
+    const jsContent = `
 /* eslint-disable */
-// @ts-nocheck
-import type { ToRef, UnwrapRef } from 'vue'
-import type { StoreDefinition } from 'pinia'
 import { storeToRefs } from 'pinia'
 
 ${storeNames.reduce(
@@ -58,13 +62,7 @@ ${storeNames.reduce(
 
 import store from '${relativeStorePath}'
 
-type StoreToRefs<T extends StoreDefinition> = {
-  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: any[]) => any
-    ? ReturnType<T>[K]
-    : ToRef<UnwrapRef<ReturnType<T>[K]>>
-}
-
-export function useStore<T extends keyof typeof storeExports>(storeName: T) {
+export function useStore(storeName) {
   const storeExports = {
   ${storeNames.reduce(
     (str, storeName) => `${str}  ${storeName}: ${storeName}Store,
@@ -75,10 +73,40 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
   const targetStore = storeExports[storeName](store)
   const storeRefs = storeToRefs(targetStore)
 
-  return { ...targetStore, ...storeRefs } as StoreToRefs<(typeof storeExports)[T]>
+  return { ...targetStore, ...storeRefs }
 }
 `
-    fs.writeFile(outputPath(), ctx, 'utf-8')
+
+    // 生成 .d.ts 类型声明文件
+    const dtsContent = `
+import type { ToRef, UnwrapRef } from 'vue'
+import type { StoreDefinition } from 'pinia'
+
+${storeNames.reduce(
+  (str, storeName) => `${str}import type ${storeName}Store from '${relativeStorePath}/${storeName}'
+`,
+  ''
+)}
+
+type StoreToRefs<T extends StoreDefinition> = {
+  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
+    ? ReturnType<T>[K]
+    : ToRef<UnwrapRef<ReturnType<T>[K]>>
+}
+
+type StoreExports = {
+${storeNames.reduce(
+  (str, storeName) => `${str}  ${storeName}: typeof ${storeName}Store
+`,
+  ''
+)}}
+
+export function useStore<T extends keyof StoreExports>(
+  storeName: T
+): StoreToRefs<StoreExports[T]>
+`
+    await fs.writeFile(outputPath(), jsContent, 'utf-8')
+    await fs.writeFile(outputDtsPath(), dtsContent, 'utf-8')
   }
 
   return {
@@ -88,7 +116,7 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
       options.watch = options.watch ?? config.mode === 'development'
     },
     buildStart() {
-      generateConfigFiles()
+      return generateConfigFiles()
     },
     configureServer(server) {
       if (!options.watch) {return}
@@ -105,11 +133,11 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
       const watchedRoot = storePath()
       server.watcher.add(watchedRoot)
       server.watcher.on('add', (file: string) => {
-        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) {return}
+        if (!file.startsWith(watchedRoot) || (!file.endsWith('.ts') && !file.endsWith('.js'))) {return}
         debounceGenerate()
       })
       server.watcher.on('unlink', (file: string) => {
-        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) {return}
+        if (!file.startsWith(watchedRoot) || (!file.endsWith('.ts') && !file.endsWith('.js'))) {return}
         debounceGenerate()
       })
     },

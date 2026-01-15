@@ -9,6 +9,7 @@ A Vite plugin that automatically generates a unified `useStore` helper from your
 - 📦 **Type Safe** - Full TypeScript support with proper type inference for state, getters, and actions
 - 🎯 **Flexible** - Supports glob patterns for excluding files
 - ⚡ **Zero Runtime** - Only runs at build time, no runtime overhead
+- 🌐 **JS Compatible** - Generates `.js` files with `.d.ts` type declarations, works in both JS and TS projects
 
 ## Installation
 
@@ -35,8 +36,8 @@ export default defineConfig({
     vue(),
     piniaAutoStore({
       storeDir: 'src/store',
-      output: 'src/helper/use-store.ts',
-      exclude: '**/index.ts',
+      output: 'src/helper/use-store.js',
+      exclude: '**/index.{ts,js}',
     }),
   ],
 })
@@ -117,24 +118,22 @@ counter.increment()          // () => void
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `storeDir` | `string` | `'src/store'` | Directory containing your Pinia stores |
-| `output` | `string` | `'src/helper/use-store.ts'` | Output path for the generated helper |
-| `exclude` | `string \| string[]` | `'**/index.ts'` | Glob pattern(s) to exclude files |
+| `include` | `string \| string[]` | `'**/*.{ts,js}'` | Glob pattern(s) to include files |
+| `exclude` | `string \| string[]` | `'**/index.{ts,js}'` | Glob pattern(s) to exclude files |
+| `output` | `string` | `'src/helper/use-store.js'` | Output path for the generated helper (will generate both `.js` and `.d.ts` files) |
 | `watch` | `boolean` | `undefined` | Enable file watching. Defaults to `true` in development mode |
 
 ## Generated Code
 
-The plugin generates a `useStore` helper that:
+The plugin generates two files:
 
-1. **Imports all stores** from your store directory (excluding matched patterns)
-2. **Exports a typed `useStore` function** that accepts a store name and returns the store instance with refs
+1. **`.js` file** - Pure JavaScript implementation (works in both JS and TS projects)
+2. **`.d.ts` file** - TypeScript type declarations (provides full type support)
 
-Example generated code:
+### Generated JavaScript file (`use-store.js`):
 
-```ts
+```js
 /* eslint-disable */
-// @ts-nocheck
-import type { ToRef, UnwrapRef } from 'vue'
-import type { StoreDefinition } from 'pinia'
 import { storeToRefs } from 'pinia'
 
 import counterStore from './store/counter'
@@ -142,13 +141,7 @@ import userStore from './store/user'
 
 import store from './store'
 
-type StoreToRefs<T extends StoreDefinition> = {
-  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: any[]) => any
-    ? ReturnType<T>[K]
-    : ToRef<UnwrapRef<ReturnType<T>[K]>>
-}
-
-export function useStore<T extends keyof typeof storeExports>(storeName: T) {
+export function useStore(storeName) {
   const storeExports = {
     counter: counterStore,
     user: userStore,
@@ -157,9 +150,41 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
   const targetStore = storeExports[storeName](store)
   const storeRefs = storeToRefs(targetStore)
 
-  return { ...targetStore, ...storeRefs } as StoreToRefs<(typeof storeExports)[T]>
+  return { ...targetStore, ...storeRefs }
 }
 ```
+
+### Generated TypeScript declarations (`use-store.d.ts`):
+
+```ts
+import type { ToRef, UnwrapRef } from 'vue'
+import type { StoreDefinition } from 'pinia'
+
+import type counterStore from './store/counter'
+import type userStore from './store/user'
+
+import type store from './store'
+
+type StoreToRefs<T extends StoreDefinition> = {
+  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
+    ? ReturnType<T>[K]
+    : ToRef<UnwrapRef<ReturnType<T>[K]>>
+}
+
+type StoreExports = {
+  counter: typeof counterStore
+  user: typeof userStore
+}
+
+export function useStore<T extends keyof StoreExports>(
+  storeName: T
+): StoreToRefs<StoreExports[T]>
+```
+
+This approach allows:
+- **JavaScript projects** to use the helper with full IntelliSense support
+- **TypeScript projects** to get complete type safety
+- Both to work seamlessly with Vite's module resolution
 
 ## Requirements
 
@@ -170,8 +195,8 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
 ## Store File Conventions
 
 - Each store file should **default export** a `defineStore` result
-- The store directory should have an `index.ts` that exports the Pinia instance (excluded by default)
-- Store files should be `.ts` files
+- The store directory should have an `index.ts` or `index.js` that exports the Pinia instance (excluded by default)
+- Store files can be either `.ts` or `.js` files
 
 ## License
 

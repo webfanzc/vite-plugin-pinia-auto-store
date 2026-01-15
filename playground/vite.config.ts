@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     piniaAutoStore({
       storeDir: 'store',
-      output: 'use-store.ts',
+      output: 'use-store.js',
       exclude: ['**/index.ts']
     }),
   ],

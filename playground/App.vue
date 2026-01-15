@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { useStore } from './use-store'
+import { useStore } from './use-store.js'
 
 const counter = useStore('counter')
-const {name, age} = useStore('user')
+const { name, age } = useStore('user')
+const { testA, testB, getterA } = useStore('test')
 </script>
 
 <template>
