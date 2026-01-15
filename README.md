@@ -36,7 +36,7 @@ export default defineConfig({
     vue(),
     piniaAutoStore({
       storeDir: 'src/store',
-      output: 'src/helper/use-store.js',
+      output: 'src/helper/use-store.ts',
       exclude: '**/index.{ts,js}',
     }),
   ],
@@ -120,17 +120,65 @@ counter.increment()          // () => void
 | `storeDir` | `string` | `'src/store'` | Directory containing your Pinia stores |
 | `include` | `string \| string[]` | `'**/*.{ts,js}'` | Glob pattern(s) to include files |
 | `exclude` | `string \| string[]` | `'**/index.{ts,js}'` | Glob pattern(s) to exclude files |
-| `output` | `string` | `'src/helper/use-store.js'` | Output path for the generated helper (will generate both `.js` and `.d.ts` files) |
+| `output` | `string` | `'src/helper/use-store.ts'` | Output path for the generated helper |
+| `outputType` | `'ts' \| 'js'` | `undefined` | Output type. If not specified, auto-detected from `output` path extension (`.ts` → `'ts'`, `.js` → `'js'`). Defaults to `'ts'` if extension cannot be determined |
 | `watch` | `boolean` | `undefined` | Enable file watching. Defaults to `true` in development mode |
 
 ## Generated Code
 
-The plugin generates two files:
+The plugin supports two output modes:
 
-1. **`.js` file** - Pure JavaScript implementation (works in both JS and TS projects)
-2. **`.d.ts` file** - TypeScript type declarations (provides full type support)
+### TypeScript Mode (default)
 
-### Generated JavaScript file (`use-store.js`):
+When `outputType` is `'ts'` or `output` ends with `.ts`, the plugin generates a single TypeScript file with both implementation and types:
+
+```ts
+import { storeToRefs } from 'pinia'
+import type { ToRef, UnwrapRef } from 'vue'
+import type { StoreDefinition } from 'pinia'
+
+import type counterStore from './store/counter'
+import type userStore from './store/user'
+
+import counterStore from './store/counter'
+import userStore from './store/user'
+
+import store from './store'
+
+type StoreToRefs<T extends StoreDefinition> = {
+  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
+    ? ReturnType<T>[K]
+    : ToRef<UnwrapRef<ReturnType<T>[K]>>
+}
+
+type StoreExports = {
+  counter: typeof counterStore
+  user: typeof userStore
+}
+
+export function useStore<T extends keyof StoreExports>(
+  storeName: T
+): StoreToRefs<StoreExports[T]> {
+  const storeExports = {
+    counter: counterStore,
+    user: userStore,
+  } as StoreExports
+
+  const targetStore = storeExports[storeName](store)
+  const storeRefs = storeToRefs(targetStore)
+
+  return { ...targetStore, ...storeRefs } as StoreToRefs<StoreExports[T]>
+}
+```
+
+### JavaScript Mode
+
+When `outputType` is `'js'` or `output` ends with `.js`, the plugin generates two files:
+
+1. **`.js` file** - Pure JavaScript implementation
+2. **`.d.ts` file** - TypeScript type declarations
+
+#### Generated JavaScript file (`use-store.js`):
 
 ```js
 /* eslint-disable */
@@ -154,7 +202,7 @@ export function useStore(storeName) {
 }
 ```
 
-### Generated TypeScript declarations (`use-store.d.ts`):
+#### Generated TypeScript declarations (`use-store.d.ts`):
 
 ```ts
 import type { ToRef, UnwrapRef } from 'vue'
@@ -162,8 +210,6 @@ import type { StoreDefinition } from 'pinia'
 
 import type counterStore from './store/counter'
 import type userStore from './store/user'
-
-import type store from './store'
 
 type StoreToRefs<T extends StoreDefinition> = {
   [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
@@ -181,10 +227,10 @@ export function useStore<T extends keyof StoreExports>(
 ): StoreToRefs<StoreExports[T]>
 ```
 
-This approach allows:
-- **JavaScript projects** to use the helper with full IntelliSense support
-- **TypeScript projects** to get complete type safety
-- Both to work seamlessly with Vite's module resolution
+### Choosing the Right Mode
+
+- **TypeScript Mode** (default): Best for TypeScript projects. Generates a single `.ts` file with full type safety.
+- **JavaScript Mode**: Best for JavaScript projects or when you need separate `.js` and `.d.ts` files. Provides IntelliSense support through the `.d.ts` file.
 
 ## Requirements
 

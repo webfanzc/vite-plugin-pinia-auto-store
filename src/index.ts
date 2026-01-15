@@ -8,6 +8,7 @@ type Options = Partial<{
   include: FilterPattern
   exclude: FilterPattern
   output: string
+  outputType: 'ts' | 'js'
   watch: boolean
 }>
 
@@ -15,7 +16,7 @@ const defaultOptions: Options = {
   storeDir: 'src/store',
   include: '**/*.{ts,js}',
   exclude: '**/index.{ts,js}',
-  output: 'src/helper/use-store.js',
+  output: 'src/helper/use-store.ts',
 }
 
 export default function (options: Options = {}): Plugin {
@@ -24,12 +25,33 @@ export default function (options: Options = {}): Plugin {
   const { storeDir, include, exclude, output, } = options as Required<Options>
   let root = process.cwd()
 
+  // 自动检测 outputType：如果用户显式指定了，使用用户指定的；否则根据 output 路径扩展名判断
+  const detectOutputType = (): 'ts' | 'js' => {
+    if (options.outputType) {
+      return options.outputType
+    }
+    if (output.endsWith('.js')) {
+      return 'js'
+    }
+    if (output.endsWith('.ts')) {
+      return 'ts'
+    }
+    // 默认使用 ts
+    return 'ts'
+  }
+
+  const outputType = detectOutputType()
+
   const resolvePath = (target: string) => (isAbsolute(target) ? target : resolve(root, target))
   const storePath = () => resolvePath(storeDir)
   const outputPath = () => {
     const path = resolvePath(output)
-    // 确保输出 .js 文件
-    return path.endsWith('.js') ? path : path.replace(/\.ts$/, '.js')
+    // 根据 outputType 确保输出正确的文件扩展名
+    if (outputType === 'js') {
+      return path.endsWith('.js') ? path : path.replace(/\.ts$/, '.js')
+    }
+    // outputType === 'ts'
+    return path.endsWith('.ts') ? path : path.replace(/\.js$/, '.ts')
   }
   const outputDtsPath = () => outputPath().replace(/\.js$/, '.d.ts')
   const outputDir = () => dirname(outputPath())
@@ -49,8 +71,9 @@ export default function (options: Options = {}): Plugin {
       relativeStorePath = `./${relativeStorePath}`
     }
 
-    // 生成 JS 文件
-    const jsContent = `
+    if (outputType === 'js') {
+      // 生成 JS 文件
+      const jsContent = `
 /* eslint-disable */
 import { storeToRefs } from 'pinia'
 
@@ -77,8 +100,9 @@ export function useStore(storeName) {
 }
 `
 
-    // 生成 .d.ts 类型声明文件
-    const dtsContent = `
+      // 生成 .d.ts 类型声明文件
+      const dtsContent = `
+/* eslint-disable */
 import type { ToRef, UnwrapRef } from 'vue'
 import type { StoreDefinition } from 'pinia'
 
@@ -105,8 +129,56 @@ export function useStore<T extends keyof StoreExports>(
   storeName: T
 ): StoreToRefs<StoreExports[T]>
 `
-    await fs.writeFile(outputPath(), jsContent, 'utf-8')
-    await fs.writeFile(outputDtsPath(), dtsContent, 'utf-8')
+      await fs.writeFile(outputPath(), jsContent, 'utf-8')
+      await fs.writeFile(outputDtsPath(), dtsContent, 'utf-8')
+    } else {
+      // 生成 TypeScript 文件（包含类型和实现）
+      const tsContent = `
+/* eslint-disable */
+// @ts-nocheck
+import { storeToRefs } from 'pinia'
+import type { ToRef, UnwrapRef } from 'vue'
+import type { StoreDefinition } from 'pinia'
+
+${storeNames.reduce(
+  (str, storeName) => `${str}import ${storeName}Store from '${relativeStorePath}/${storeName}'
+`,
+  ''
+)}
+
+import store from '${relativeStorePath}'
+
+type StoreToRefs<T extends StoreDefinition> = {
+  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
+    ? ReturnType<T>[K]
+    : ToRef<UnwrapRef<ReturnType<T>[K]>>
+}
+
+type StoreExports = {
+${storeNames.reduce(
+  (str, storeName) => `${str}  ${storeName}: typeof ${storeName}Store
+`,
+  ''
+)}}
+
+export function useStore<T extends keyof StoreExports>(
+  storeName: T
+): StoreToRefs<StoreExports[T]> {
+  const storeExports = {
+${storeNames.reduce(
+  (str, storeName) => `${str}    ${storeName}: ${storeName}Store,
+`,
+  ''
+)}  } as StoreExports
+
+  const targetStore = storeExports[storeName](store)
+  const storeRefs = storeToRefs(targetStore)
+
+  return { ...targetStore, ...storeRefs } as StoreToRefs<StoreExports[T]>
+}
+`
+      await fs.writeFile(outputPath(), tsContent, 'utf-8')
+    }
   }
 
   return {

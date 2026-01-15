@@ -36,7 +36,7 @@ export default defineConfig({
     vue(),
     piniaAutoStore({
       storeDir: 'src/store',
-      output: 'src/helper/use-store.js',
+      output: 'src/helper/use-store.ts',
       exclude: '**/index.{ts,js}',
     }),
   ],
@@ -120,17 +120,65 @@ counter.increment()          // () => void
 | `storeDir` | `string` | `'src/store'` | 包含 Pinia stores 的目录 |
 | `include` | `string \| string[]` | `'**/*.{ts,js}'` | 包含文件的 glob 模式 |
 | `exclude` | `string \| string[]` | `'**/index.{ts,js}'` | 排除文件的 glob 模式 |
-| `output` | `string` | `'src/helper/use-store.js'` | 生成的辅助函数输出路径（会同时生成 `.js` 和 `.d.ts` 文件） |
+| `output` | `string` | `'src/helper/use-store.ts'` | 生成的辅助函数输出路径 |
+| `outputType` | `'ts' \| 'js'` | `undefined` | 输出类型。如果未指定，会根据 `output` 路径的扩展名自动检测（`.ts` → `'ts'`，`.js` → `'js'`）。如果无法判断，默认为 `'ts'` |
 | `watch` | `boolean` | `undefined` | 是否启用文件监听，开发模式下默认为 `true` |
 
 ## 生成的代码
 
-插件会生成两个文件：
+插件支持两种输出模式：
 
-1. **`.js` 文件** - 纯 JavaScript 实现（JS 和 TS 项目都能使用）
-2. **`.d.ts` 文件** - TypeScript 类型声明（提供完整的类型支持）
+### TypeScript 模式（默认）
 
-### 生成的 JavaScript 文件 (`use-store.js`):
+当 `outputType` 为 `'ts'` 或 `output` 以 `.ts` 结尾时，插件会生成一个包含实现和类型的 TypeScript 文件：
+
+```ts
+import { storeToRefs } from 'pinia'
+import type { ToRef, UnwrapRef } from 'vue'
+import type { StoreDefinition } from 'pinia'
+
+import type counterStore from './store/counter'
+import type userStore from './store/user'
+
+import counterStore from './store/counter'
+import userStore from './store/user'
+
+import store from './store'
+
+type StoreToRefs<T extends StoreDefinition> = {
+  [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
+    ? ReturnType<T>[K]
+    : ToRef<UnwrapRef<ReturnType<T>[K]>>
+}
+
+type StoreExports = {
+  counter: typeof counterStore
+  user: typeof userStore
+}
+
+export function useStore<T extends keyof StoreExports>(
+  storeName: T
+): StoreToRefs<StoreExports[T]> {
+  const storeExports = {
+    counter: counterStore,
+    user: userStore,
+  } as StoreExports
+
+  const targetStore = storeExports[storeName](store)
+  const storeRefs = storeToRefs(targetStore)
+
+  return { ...targetStore, ...storeRefs } as StoreToRefs<StoreExports[T]>
+}
+```
+
+### JavaScript 模式
+
+当 `outputType` 为 `'js'` 或 `output` 以 `.js` 结尾时，插件会生成两个文件：
+
+1. **`.js` 文件** - 纯 JavaScript 实现
+2. **`.d.ts` 文件** - TypeScript 类型声明
+
+#### 生成的 JavaScript 文件 (`use-store.js`):
 
 ```js
 /* eslint-disable */
@@ -154,7 +202,7 @@ export function useStore(storeName) {
 }
 ```
 
-### 生成的 TypeScript 类型声明 (`use-store.d.ts`):
+#### 生成的 TypeScript 类型声明 (`use-store.d.ts`):
 
 ```ts
 import type { ToRef, UnwrapRef } from 'vue'
@@ -162,8 +210,6 @@ import type { StoreDefinition } from 'pinia'
 
 import type counterStore from './store/counter'
 import type userStore from './store/user'
-
-import type store from './store'
 
 type StoreToRefs<T extends StoreDefinition> = {
   [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: unknown[]) => unknown
@@ -181,10 +227,10 @@ export function useStore<T extends keyof StoreExports>(
 ): StoreToRefs<StoreExports[T]>
 ```
 
-这种方式的优势：
-- **JavaScript 项目**可以使用辅助函数并获得完整的 IntelliSense 支持
-- **TypeScript 项目**可以获得完整的类型安全
-- 两者都能与 Vite 的模块解析无缝配合
+### 选择正确的模式
+
+- **TypeScript 模式**（默认）：最适合 TypeScript 项目。生成单个 `.ts` 文件，提供完整的类型安全。
+- **JavaScript 模式**：最适合 JavaScript 项目，或需要单独的 `.js` 和 `.d.ts` 文件时。通过 `.d.ts` 文件提供 IntelliSense 支持。
 
 ## 环境要求
 

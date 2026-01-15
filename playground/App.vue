@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useStore } from './use-store.js'
+import { useStore } from './use-store'
 
 const counter = useStore('counter')
 const { name, age } = useStore('user')
