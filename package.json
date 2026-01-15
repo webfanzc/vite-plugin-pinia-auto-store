@@ -1,6 +1,6 @@
 {
   "name": "pinia-plugin-auto-store",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A Vite plugin that generates Pinia store refs and keeps them in sync from a store directory.",
   "main": "./dist/main.js",
   "module": "./dist/main.mjs",
