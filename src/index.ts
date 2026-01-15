@@ -91,12 +91,12 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
       generateConfigFiles()
     },
     configureServer(server) {
-      if (!options.watch) return
+      if (!options.watch) {return}
 
       const debounce = (fn: () => void, delay = 100) => {
         let timer: ReturnType<typeof setTimeout> | undefined
         return () => {
-          if (timer) clearTimeout(timer)
+          if (timer) {clearTimeout(timer)}
           timer = setTimeout(fn, delay)
         }
       }
@@ -105,11 +105,11 @@ export function useStore<T extends keyof typeof storeExports>(storeName: T) {
       const watchedRoot = storePath()
       server.watcher.add(watchedRoot)
       server.watcher.on('add', (file: string) => {
-        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) return
+        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) {return}
         debounceGenerate()
       })
       server.watcher.on('unlink', (file: string) => {
-        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) return
+        if (!file.startsWith(watchedRoot) || !file.endsWith('.ts')) {return}
         debounceGenerate()
       })
     },
