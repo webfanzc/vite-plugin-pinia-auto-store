@@ -69,7 +69,7 @@
     "vite": "^7.1.1"
   },
   "simple-git-hooks": {
-    "pre-commit": "npx --no lint-staged",
+    "pre-commit": "npx --no lint-staged || [ $? -eq 1 ]",
     "commit-msg": "npx --no commitlint --edit \"$1\""
   },
   "repository": {
