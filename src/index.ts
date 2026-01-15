@@ -67,6 +67,8 @@ export default function (options: Options = {}): Plugin {
 
     // 计算从 output 文件到 store 目录的相对路径
     let relativeStorePath = relative(outputDir(), storeRoot)
+    // 将 Windows 路径分隔符 \ 替换为 /，确保在 import 语句中正确工作
+    relativeStorePath = relativeStorePath.replace(/\\/g, '/')
     if (!relativeStorePath.startsWith('.')) {
       relativeStorePath = `./${relativeStorePath}`
     }
