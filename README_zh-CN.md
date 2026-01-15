@@ -1,5 +1,7 @@
 # pinia-plugin-auto-store
 
+[English](README.md) | [中文](README_zh-CN.md)
+
 一个 Vite 插件，自动从 Pinia store 目录生成统一的 `useStore` 辅助函数，支持完整的 TypeScript 类型和热更新。
 
 ## 特性

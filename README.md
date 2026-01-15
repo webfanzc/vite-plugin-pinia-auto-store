@@ -1,5 +1,7 @@
 # pinia-plugin-auto-store
 
+[English](README.md) | [中文](README_zh-CN.md)
+
 A Vite plugin that automatically generates a unified `useStore` helper from your Pinia store directory, with full TypeScript support and hot reload.
 
 ## Features
