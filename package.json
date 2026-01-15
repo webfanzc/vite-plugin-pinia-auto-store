@@ -69,12 +69,12 @@
     "vite": "^7.1.1"
   },
   "simple-git-hooks": {
-    "pre-commit": "npx --no lint-staged || [ $? -eq 1 ]",
+    "pre-commit": "pnpm run lint:fix",
     "commit-msg": "npx --no commitlint --edit \"$1\""
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/webfanzc/pinia-plugin-auto-store.git"
+    "url": "git+https://github.com/webfanzc/vite-plugin-pinia-auto-store.git"
   },
   "packageManager": "pnpm@10.11.0"
 }
