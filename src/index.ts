@@ -57,13 +57,18 @@ export default function (options: Options = {}): Plugin {
   const outputDir = () => dirname(outputPath())
   const filter = createFilter(include, exclude)
 
+  /** 将 kebab-case 转为 camelCase，用于 store 的变量名和 useStore 的 key */
+  const kebabToCamel = (str: string): string =>
+    str.replace(/-([a-z])/gi, (_, c) => (c as string).toUpperCase())
+
   async function generateConfigFiles() {
     await fs.mkdir(outputDir(), { recursive: true })
     const storeRoot = storePath()
     const storesPath = await fs.readdir(storeRoot)
-    const storeNames = storesPath
+    const storeFiles = storesPath
       .filter(i => filter(resolve(storeRoot, i)))
       .map(i => i.replace(/\.(ts|js)$/, ''))
+    const storeNames = storeFiles.map(kebabToCamel)
 
     // 计算从 output 文件到 store 目录的相对路径
     let relativeStorePath = relative(outputDir(), storeRoot)
@@ -79,21 +84,14 @@ export default function (options: Options = {}): Plugin {
 /* eslint-disable */
 import { storeToRefs } from 'pinia'
 
-${storeNames.reduce(
-  (str, storeName) => `${str}import ${storeName}Store from '${relativeStorePath}/${storeName}'
-`,
-  ''
-)}
+${storeNames.map((name, i) => `import ${name}Store from '${relativeStorePath}/${storeFiles[i]}'`).join('\n')}
 
 import store from '${relativeStorePath}'
 
 export function useStore(storeName) {
   const storeExports = {
-  ${storeNames.reduce(
-    (str, storeName) => `${str}  ${storeName}: ${storeName}Store,
-  `,
-    ''
-  )}}
+  ${storeNames.map(name => `  ${name}: ${name}Store,`).join('\n')}
+  }
 
   const targetStore = storeExports[storeName](store)
   const storeRefs = storeToRefs(targetStore)
@@ -108,11 +106,7 @@ export function useStore(storeName) {
 import type { ToRef, UnwrapRef } from 'vue'
 import type { StoreDefinition } from 'pinia'
 
-${storeNames.reduce(
-  (str, storeName) => `${str}import type ${storeName}Store from '${relativeStorePath}/${storeName}'
-`,
-  ''
-)}
+${storeNames.map((name, i) => `import type ${name}Store from '${relativeStorePath}/${storeFiles[i]}'`).join('\n')}
 
 type StoreToRefs<T extends StoreDefinition> = {
   [K in keyof ReturnType<T>]: ReturnType<T>[K] extends (...args: any[]) => any
@@ -121,11 +115,8 @@ type StoreToRefs<T extends StoreDefinition> = {
 }
 
 type StoreExports = {
-${storeNames.reduce(
-  (str, storeName) => `${str}  ${storeName}: typeof ${storeName}Store
-`,
-  ''
-)}}
+${storeNames.map(name => `  ${name}: typeof ${name}Store`).join('\n')}
+}
 
 export function useStore<T extends keyof StoreExports>(
   storeName: T
@@ -142,11 +133,7 @@ import { storeToRefs } from 'pinia'
 import type { ToRef, UnwrapRef } from 'vue'
 import type { StoreDefinition } from 'pinia'
 
-${storeNames.reduce(
-  (str, storeName) => `${str}import ${storeName}Store from '${relativeStorePath}/${storeName}'
-`,
-  ''
-)}
+${storeNames.map((name, i) => `import ${name}Store from '${relativeStorePath}/${storeFiles[i]}'`).join('\n')}
 
 import store from '${relativeStorePath}'
 
@@ -157,21 +144,15 @@ type StoreToRefs<T extends StoreDefinition> = {
 }
 
 type StoreExports = {
-${storeNames.reduce(
-  (str, storeName) => `${str}  ${storeName}: typeof ${storeName}Store
-`,
-  ''
-)}}
+${storeNames.map(name => `  ${name}: typeof ${name}Store`).join('\n')}
+}
 
 export function useStore<T extends keyof StoreExports>(
   storeName: T
 ): StoreToRefs<StoreExports[T]> {
   const storeExports = {
-${storeNames.reduce(
-  (str, storeName) => `${str}    ${storeName}: ${storeName}Store,
-`,
-  ''
-)}  } as StoreExports
+${storeNames.map(name => `    ${name}: ${name}Store,`).join('\n')}
+  } as StoreExports
 
   const targetStore = storeExports[storeName](store)
   const storeRefs = storeToRefs(targetStore)

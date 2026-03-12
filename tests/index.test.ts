@@ -87,6 +87,39 @@ export default createPinia()`
     await expect(fs.access(outputDtsFile)).rejects.toThrow()
   })
 
+  it('should convert kebab-case store file names to camelCase for useStore key and identifiers', async () => {
+    await fs.writeFile(
+      join(storeDir, 'user-profile.ts'),
+      `import { defineStore } from 'pinia'
+export default defineStore('user-profile', () => ({ name: 'test' }))`
+    )
+    await fs.writeFile(
+      join(storeDir, 'index.ts'),
+      `import { createPinia } from 'pinia'
+export default createPinia()`
+    )
+
+    const plugin = piniaAutoStore({
+      storeDir: 'src/store',
+      output: 'src/helper/use-store.ts',
+      exclude: '**/index.ts',
+    })
+
+    ;(plugin.configResolved as unknown as (config: MockResolvedConfig) => void)?.({
+      root: testDir,
+      mode: 'development',
+    })
+    await (plugin.buildStart as unknown as (options: MockBuildStartOptions) => Promise<void>)?.({})
+
+    const content = await fs.readFile(outputFile, 'utf-8')
+    // import 路径使用原始文件名（kebab-case）
+    expect(content).toContain("from '../store/user-profile'")
+    // 变量名和 useStore 的 key 使用 camelCase
+    expect(content).toContain('userProfileStore')
+    expect(content).toContain('userProfile: userProfileStore')
+    expect(content).toContain('typeof userProfileStore')
+  })
+
   it('should exclude files matching exclude pattern', async () => {
     await fs.writeFile(
       join(storeDir, 'user.ts'),

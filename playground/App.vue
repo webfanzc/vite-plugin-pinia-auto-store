@@ -4,6 +4,7 @@ import { useStore } from './use-store'
 const counter = useStore('counter')
 const { name, age, setName } = useStore('user')
 const { testA, testB, getterA } = useStore('test')
+const {count} = useStore('aB')
 </script>
 
 <template>
